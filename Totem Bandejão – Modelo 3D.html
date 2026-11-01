@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Totem Bandejão – Modelo 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --blue:#0B4EA2; --ink:#0B1F3A; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #E9EDF2; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; color: var(--ink); }
+  #c { display: block; width: 100vw; height: 100vh; }
+  .panel { position: absolute; background: rgba(255,255,255,.94); border-radius: 16px; box-shadow: 0 8px 30px rgba(11,31,58,.12); padding: 16px 18px; }
+  #title { top: 16px; left: 16px; max-width: 340px; }
+  #title .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--blue); }
+  #title h1 { margin: 4px 0 6px; font-size: 28px; line-height: 1.05; }
+  #title p { margin: 0; font-size: 15px; line-height: 1.4; color: #3D4F66; }
+  #views { top: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; width: 210px; }
+  #views .lbl { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #3D4F66; }
+  button.v { min-height: 40px; border-radius: 10px; border: 2px solid var(--blue); background: #fff; color: var(--blue); font: 700 15px 'Atkinson Hyperlegible', sans-serif; cursor: pointer; text-align: left; padding: 0 12px; }
+  button.v:hover { background: #E6EFFA; }
+  button.v.on { background: var(--blue); color: #fff; }
+  #caption { left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; background: var(--ink); color: #fff; max-width: min(720px, calc(100vw - 32px)); font-size: 16px; }
+  #caption svg { flex: none; }
+  #hint { left: 16px; bottom: 16px; max-width: 300px; font-size: 14px; line-height: 1.45; color: #22344D; }
+  #hint b { color: var(--ink); }
+  .tag { position: absolute; transform: translate(-50%, -100%); pointer-events: none; background: #fff; color: var(--ink); border: 2px solid var(--blue); border-radius: 10px; padding: 4px 9px; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 4px 12px rgba(11,31,58,.15); }
+  .tag::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 2px; height: 8px; background: var(--blue); transform: translateX(-50%); }
+  .tag small { display: block; font-weight: 400; color: #3D4F66; font-size: 11.5px; }
+  #tags.off { display: none; }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #3D4F66; }
+  @media (max-width: 760px) {
+    #title { max-width: calc(100vw - 32px); padding: 12px 14px; }
+    #title h1 { font-size: 22px; } #title p { display: none; }
+    #views { top: auto; bottom: 76px; right: 16px; width: 170px; padding: 10px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Modelo 3D interativo do totem Bandejão"></canvas>
+<div id="loading">Carregando modelo 3D…</div>
+<div id="tags"></div>
+
+<div id="title" class="panel">
+  <div class="eyebrow">TP1 · IHC · MODELO 3D</div>
+  <h1>Totem Bandejão</h1>
+  <p>Arraste para girar, role para aproximar. Clique no leitor, no teclado, na tela e na maquininha para testar o fluxo de recarga.</p>
+</div>
+
+<div id="views" class="panel">
+  <span class="lbl">VISTAS</span>
+  <button class="v on" data-view="tq">3/4 frontal</button>
+  <button class="v" data-view="front">Frente</button>
+  <button class="v" data-view="side">Lateral (ângulo do painel)</button>
+  <button class="v" data-view="wheel">Altura de cadeirante</button>
+  <button class="v" data-view="console">Teclado e braile</button>
+  <span class="lbl" style="margin-top:6px">OPÇÕES</span>
+  <button class="v on" id="tTags">Legendas das peças</button>
+  <button class="v" id="tRot">Girar sozinho</button>
+  <button class="v" id="tReset">Reiniciar demonstração</button>
+</div>
+
+<div id="hint" class="panel">
+  <b>Teste rápido:</b> clique no <b>leitor</b> (círculo azul) → <b>▼/OK</b> ou toque em Recarregar → digite <b>2 0</b> → <b>Confirmar</b> → clique na <b>maquininha</b>. O comprovante sai da impressora.
+</div>
+
+<div id="caption" class="panel" role="status" aria-live="polite">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+  <span id="capTxt">Bem-vindo ao Bandejão. Encoste sua carteirinha no leitor.</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const BLUE = '#0B4EA2', INK = '#0B1F3A';
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#E9EDF2');
+
+
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.minDistance = 0.5; controls.maxDistance = 6;
+  controls.maxPolarAngle = Math.PI * 0.52;
+  controls.target.set(0, 1.0, 0);
+
+  // ---------- luzes ----------
+  scene.add(new THREE.HemisphereLight('#ffffff', '#9aa6b5', 0.75));
+  const key = new THREE.DirectionalLight('#ffffff', 0.9);
+  key.position.set(2.2, 3.5, 2.6); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  Object.assign(key.shadow.camera, { left: -1.5, right: 1.5, top: 2.2, bottom: -0.5, near: 0.5, far: 10 });
+  scene.add(key);
+  const rim = new THREE.DirectionalLight('#cfe0ff', 0.35); rim.position.set(-3, 2, -2); scene.add(rim);
+
+  // ---------- chão ----------
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshStandardMaterial({ color: '#E9EDF2', roughness: 1 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+  // ---------- helpers ----------
+  const mat = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.55, metalness: 0.1 }, o || {}));
+  const clickables = [];
+  function box(w, h, d, m) { const g = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); g.castShadow = true; g.receiveShadow = true; return g; }
+  function roundedSlab(w, h, d, r, m) {
+    const s = new THREE.Shape(); const x = -w / 2, y = -h / 2;
+    s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+    s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+    s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+    const g = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3, curveSegments: 8 });
+    g.translate(0, 0, -d / 2);
+    const mesh = new THREE.Mesh(g, m); mesh.castShadow = true; mesh.receiveShadow = true; return mesh;
+  }
+  function canvasTex(w, h, draw) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    const api = { cv, ctx: cv.getContext('2d'), tex: t, draw: () => { draw(api.ctx, w, h); t.needsUpdate = true; } };
+    api.draw(); return api;
+  }
+  function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  const F = (wgt, px) => `${wgt} ${px}px 'Atkinson Hyperlegible', system-ui, sans-serif`;
+
+  // ---------- estado da demonstração ----------
+  const S = { screen: 'espera', bal: 1.5, val: '', amt: 0, sel: 0, led: 'blue', paper: 0, paperTarget: 0, audio: '' };
+  const fmt = v => 'R$ ' + v.toFixed(2).replace('.', ',');
+  const capEl = document.getElementById('capTxt');
+  function say(t) { S.audio = t; capEl.textContent = t; }
+
+  // ---------- totem ----------
+  const totem = new THREE.Group(); scene.add(totem);
+  const casing = mat('#1F2A37', { roughness: 0.45, metalness: 0.25 });
+  const darker = mat('#151D27', { roughness: 0.5, metalness: 0.2 });
+  const blueM = mat(BLUE, { roughness: 0.4 });
+
+  // base
+  const plinth = roundedSlab(0.66, 0.30, 0.06, 0.06, darker); plinth.rotation.x = -Math.PI / 2; plinth.position.set(0, 0.03, 0.02); totem.add(plinth);
+  // corpo
+  const BODY_W = 0.60, BODY_D = 0.26, BODY_H = 1.52, BODY_Y0 = 0.06;
+  const body = roundedSlab(BODY_W, BODY_H, BODY_D, 0.07, casing); body.position.set(0, BODY_Y0 + BODY_H / 2, 0); totem.add(body);
+  const FRONT = BODY_D / 2 + 0.008;
+  // faixas laterais azuis
+  [-1, 1].forEach(sx => { const st = box(0.006, 1.30, 0.06, blueM); st.position.set(sx * (BODY_W / 2 + 0.006), BODY_Y0 + 0.72, 0.06); totem.add(st); });
+  // logo lateral
+  const sideLogo = canvasTex(512, 128, (c, w, h) => { c.clearRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = F(700, 64); c.textBaseline = 'middle'; c.fillText('Bandejão', 16, h / 2); c.font = F(400, 32); c.fillStyle = '#B8C4D3'; c.fillText('CEFET-MG', 330, h / 2 + 6); });
+  const sl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.125), new THREE.MeshBasicMaterial({ map: sideLogo.tex, transparent: true }));
+  sl.rotation.set(0, Math.PI / 2, Math.PI / 2); sl.position.set(BODY_W / 2 + 0.0095, 1.15, -0.03); totem.add(sl);
+
+  // cabeçalho: logo, LED, alto-falante
+  const head = canvasTex(512, 96, (c, w, h) => {
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = BLUE; rr(c, 4, 14, 68, 68, 14); c.fill();
+    c.strokeStyle = '#fff'; c.lineWidth = 6; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(16, 46); c.lineTo(60, 46); c.stroke();
+    c.beginPath(); c.arc(38, 46, 18, 0, Math.PI); c.stroke();
+    c.fillStyle = '#fff'; c.font = F(700, 40); c.textBaseline = 'middle'; c.fillText('Bandejão', 86, 44);
+    c.font = F(400, 22); c.fillStyle = '#B8C4D3'; c.fillText('CEFET-MG', 290, 48);
+  });
+  const hd = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.056), new THREE.MeshBasicMaterial({ map: head.tex, transparent: true }));
+  hd.position.set(-0.12, 1.515, FRONT + 0.001); totem.add(hd);
+  const ledMat = new THREE.MeshStandardMaterial({ color: '#3E8BFF', emissive: '#3E8BFF', emissiveIntensity: 1.2 });
+  const led = box(0.16, 0.012, 0.01, ledMat); led.position.set(0.14, 1.53, FRONT); led.castShadow = false; totem.add(led);
+  const ledLight = new THREE.PointLight('#3E8BFF', 0.35, 0.6); ledLight.position.set(0.14, 1.53, FRONT + 0.05); totem.add(ledLight);
+  const grill = new THREE.Group(); const holeM = mat('#0B0F14', { roughness: 0.9 });
+  for (let i = 0; i < 9; i++) for (let j = 0; j < 3; j++) { const hcyl = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.004, 10), holeM); hcyl.rotation.x = Math.PI / 2; hcyl.position.set(0.075 + i * 0.016, 1.495 - j * 0.013, FRONT); grill.add(hcyl); }
+  totem.add(grill);
+
+  // ---------- tela ----------
+  let hits = [];
+  const SW = 0.34, SH = SW * 780 / 540, SCY = 1.18;
+  const bezel = roundedSlab(SW + 0.05, SH + 0.05, 0.02, 0.025, mat('#0B0F14', { roughness: 0.3 }));
+  bezel.position.set(0, SCY, FRONT + 0.004); totem.add(bezel);
+  const scr = canvasTex(540, 780, drawScreen);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ map: scr.tex, toneMapped: false }));
+  screen.position.set(0, SCY, FRONT + 0.024); screen.userData.act = 'screen'; totem.add(screen); clickables.push(screen);
+
+  // regiões clicáveis da tela (coordenadas em px do canvas 540x780)
+  function btn(c, x, y, w, h, label, opt) {
+    opt = opt || {};
+    c.fillStyle = opt.fill || '#fff'; rr(c, x, y, w, h, 16); c.fill();
+    c.lineWidth = opt.sel ? 6 : 3; c.strokeStyle = opt.sel ? INK : (opt.stroke || BLUE); c.stroke();
+    c.fillStyle = opt.color || BLUE; c.font = F(700, opt.size || 26); c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(label, x + w / 2, y + h / 2); c.textAlign = 'left';
+    if (opt.id) hits.push({ id: opt.id, x, y, w, h });
+  }
+  function wrap(c, text, x, y, maxW, lh) {
+    const words = text.split(' '); let line = '';
+    for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (c.measureText(t).width > maxW && line) { c.fillText(line, x, y); y += lh; line = wd; } else line = t; }
+    c.fillText(line, x, y); return y + lh;
+  }
+  function drawScreen(c, w, h) {
+    hits = [];
+    c.fillStyle = '#F4F7FB'; c.fillRect(0, 0, w, h);
+    // barra
+    c.fillStyle = BLUE; c.fillRect(0, 0, w, 72);
+    c.fillStyle = '#fff'; c.textBaseline = 'middle';
+    const logged = S.screen !== 'espera';
+    if (logged) { c.font = F(700, 22); c.fillText('Lucas Almeida', 22, 26); c.font = F(400, 18); c.fillText('Saldo: ' + fmt(S.bal), 22, 50); }
+    else { c.font = F(700, 24); c.fillText('Bandejão CEFET-MG', 22, 36); }
+    // legenda de áudio
+    c.fillStyle = INK; c.fillRect(0, h - 64, w, 64);
+    c.fillStyle = '#fff'; c.font = F(400, 17); c.textBaseline = 'top';
+    wrap(c, S.audio, 20, h - 54, w - 40, 21);
+    c.fillStyle = INK; c.textBaseline = 'alphabetic';
+    const L = 32, R = w - 32;
+
+    if (S.screen === 'espera') {
+      c.textAlign = 'center';
+      c.strokeStyle = INK; c.lineWidth = 5; rr(c, w / 2 - 80, 180, 130, 90, 12); c.stroke();
+      c.beginPath(); c.moveTo(w / 2 - 55, 215); c.lineTo(w / 2 - 5, 215); c.moveTo(w / 2 - 55, 240); c.lineTo(w / 2 - 25, 240); c.stroke();
+      c.beginPath(); c.arc(w / 2 + 60, 225, 22, -0.9, 0.9); c.stroke(); c.beginPath(); c.arc(w / 2 + 60, 225, 40, -0.9, 0.9); c.stroke();
+      c.font = F(700, 40); c.fillText('Bem-vindo ao', w / 2, 350); c.fillText('Bandejão!', w / 2, 396);
+      c.font = F(400, 25); c.fillText('Encoste sua carteirinha no leitor', w / 2, 460); c.fillText('à direita, abaixo da tela.', w / 2, 492);
+      c.fillStyle = BLUE; c.font = F(700, 24); c.fillText('Leitor  ↘', w / 2, 560);
+      c.textAlign = 'left';
+    }
+    if (S.screen === 'inicio') {
+      c.font = F(700, 38); c.fillText('Olá, Lucas!', L, 130);
+      c.fillStyle = '#fff'; rr(c, L, 152, R - L, 88, 16); c.fill(); c.strokeStyle = '#C9D3E0'; c.lineWidth = 2; c.stroke();
+      c.fillStyle = '#3D4F66'; c.font = F(400, 22); c.fillText('Seu saldo', L + 20, 204);
+      c.fillStyle = INK; c.font = F(700, 42); c.textAlign = 'right'; c.fillText(fmt(S.bal), R - 20, 212); c.textAlign = 'left';
+      if (S.bal < 3.9) { c.fillStyle = '#FDECEA'; rr(c, L, 254, R - L, 50, 12); c.fill(); c.fillStyle = '#8A1C12'; c.font = F(700, 19); c.fillText('Saldo baixo: a refeição custa R$ 3,90.', L + 16, 286); }
+      const items = [['Recarregar', 'rec'], ['Transferir', 'tr'], ['Cardápio', 'menu'], ['Avaliar', 'av']];
+      items.forEach((it, i) => { const bx = L + (i % 2) * ((R - L) / 2 + 8), by = 322 + Math.floor(i / 2) * 150; btn(c, bx, by, (R - L) / 2 - 8, 136, it[0], { id: it[1], sel: S.sel === i, size: 28 }); });
+      c.fillStyle = '#3D4F66'; c.font = F(400, 17); c.textAlign = 'center'; c.fillText('Sem tocar na tela? Use ▲ ▼ e OK no teclado.', w / 2, 650); c.textAlign = 'left';
+    }
+    if (S.screen === 'recarga') {
+      c.font = F(700, 36); c.fillText('Quanto quer recarregar?', L, 130);
+      c.fillStyle = '#3D4F66'; c.font = F(400, 21); wrap(c, 'Toque em um valor ou digite no teclado numérico e aperte Confirmar.', L, 170, R - L, 28);
+      [10, 20, 50].forEach((v, i) => btn(c, L + i * ((R - L) / 3 + 4), 240, (R - L) / 3 - 8, 76, 'R$ ' + v, { id: 'q' + v }));
+      c.fillStyle = '#fff'; rr(c, L, 350, R - L, 110, 16); c.fill(); c.setLineDash([10, 8]); c.strokeStyle = BLUE; c.lineWidth = 3; c.stroke(); c.setLineDash([]);
+      c.fillStyle = INK; c.font = F(700, 56); c.textAlign = 'center'; c.fillText('R$ ' + (S.val ? S.val + ',00' : '0,00'), w / 2, 425); c.textAlign = 'left';
+      if (S.err) { c.fillStyle = '#FDECEA'; rr(c, L, 480, R - L, 50, 12); c.fill(); c.fillStyle = '#8A1C12'; c.font = F(700, 19); c.fillText(S.err, L + 16, 512); }
+      btn(c, L, 620, R - L, 60, 'Voltar', { id: 'home', stroke: '#3D4F66', color: INK, size: 22 });
+    }
+    if (S.screen === 'pagar') {
+      c.textAlign = 'center';
+      c.font = F(700, 36); c.fillText('Aproxime seu cartão', w / 2, 220); c.fillText('na maquininha', w / 2, 264);
+      c.font = F(700, 60); c.fillText(fmt(S.amt), w / 2, 370);
+      c.fillStyle = '#3D4F66'; c.font = F(400, 22); c.fillText('Ela fica abaixo do teclado, à direita,', w / 2, 440); c.fillText('e está piscando em azul.', w / 2, 470);
+      c.strokeStyle = INK; c.lineWidth = 7; c.lineCap = 'round'; c.beginPath(); c.moveTo(w / 2, 510); c.lineTo(w / 2, 590); c.moveTo(w / 2 - 30, 560); c.lineTo(w / 2, 590); c.lineTo(w / 2 + 30, 560); c.stroke();
+      c.textAlign = 'left';
+    }
+    if (S.screen === 'ok') {
+      c.textAlign = 'center';
+      c.strokeStyle = '#1B6E35'; c.lineWidth = 8; c.beginPath(); c.arc(w / 2, 200, 60, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.moveTo(w / 2 - 28, 202); c.lineTo(w / 2 - 6, 224); c.lineTo(w / 2 + 30, 180); c.stroke();
+      c.fillStyle = INK; c.font = F(700, 38); c.fillText('Recarga concluída!', w / 2, 320);
+      c.font = F(400, 24); c.fillText(fmt(S.amt) + ' adicionados.', w / 2, 360);
+      c.fillStyle = '#fff'; rr(c, L, 390, R - L, 90, 16); c.fill(); c.strokeStyle = '#C9D3E0'; c.lineWidth = 2; c.stroke();
+      c.textAlign = 'left'; c.fillStyle = '#3D4F66'; c.font = F(400, 22); c.fillText('Novo saldo', L + 20, 444);
+      c.textAlign = 'right'; c.fillStyle = INK; c.font = F(700, 40); c.fillText(fmt(S.bal), R - 20, 450);
+      c.textAlign = 'center'; c.fillStyle = '#3D4F66'; c.font = F(400, 20); c.fillText('Comprovante impresso: pegue abaixo da tela.', w / 2, 525);
+      c.textAlign = 'left';
+      btn(c, L, 600, R - L, 64, 'Voltar ao início', { id: 'home', fill: BLUE, color: '#fff', stroke: BLUE, size: 24 });
+    }
+    if (S.screen === 'info') {
+      c.textAlign = 'center'; c.font = F(700, 32); c.fillText('Função demonstrada no', w / 2, 280); c.fillText('protótipo navegável', w / 2, 320);
+      c.fillStyle = '#3D4F66'; c.font = F(400, 22); c.fillText('Transferir, Cardápio e Avaliar estão', w / 2, 390); c.fillText('completos no protótipo do Claude Design.', w / 2, 420);
+      c.textAlign = 'left'; btn(c, L, 600, R - L, 64, 'Voltar', { id: 'home', stroke: '#3D4F66', color: INK, size: 22 });
+    }
+  }
+
+  // ---------- console inclinado (teclado + leitor) ----------
+  const TILT = 0.42; // ~24°
+  const consoleG = new THREE.Group();
+  consoleG.position.set(0, 0.86, FRONT + 0.10); consoleG.rotation.x = TILT; totem.add(consoleG);
+  const slab = box(0.58, 0.035, 0.24, casing); consoleG.add(slab);
+  const support = box(0.58, 0.14, 0.12, casing); support.position.set(0, -0.06, -0.08); support.rotation.x = -TILT; consoleG.add(support);
+  const deck = box(0.36, 0.006, 0.22, mat('#2B3846')); deck.position.set(-0.095, 0.02, 0); consoleG.add(deck);
+  const TOP = 0.024;
+
+  const keyTexs = [];
+  function keyTop(label, br, bg, fg, w, h, small) {
+    return keyTexs[keyTexs.push(canvasTex(Math.round(w * 2400), Math.round(h * 2400), (c, W, H) => {
+      c.fillStyle = bg; c.fillRect(0, 0, W, H);
+      c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = F(700, small ? H * 0.34 : H * 0.42); c.fillText(label, W / 2, H * (br ? 0.38 : 0.5));
+      if (br) { c.font = `${H * 0.26}px 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', 'Noto Sans Symbols 2', sans-serif`; c.fillText(br, W / 2, H * 0.77); }
+    })) - 1];
+  }
+  const keyMeshes = {};
+  function addKey(id, label, br, x, z, w, d, bg, fg, small) {
+    const t = keyTop(label, br, bg, fg, w, d, small);
+    const side = mat(bg, { roughness: 0.4 });
+    const mats = [side, side, new THREE.MeshStandardMaterial({ map: t.tex, roughness: 0.45 }), side, side, side];
+    const k = new THREE.Mesh(new THREE.BoxGeometry(w, 0.014, d), mats);
+    k.position.set(x, TOP + 0.007, z); k.castShadow = true; k.userData = { act: id, baseY: TOP + 0.007 };
+    consoleG.add(k); clickables.push(k); keyMeshes[id] = k; return k;
+  }
+  const brMap = { '1': '⠁', '2': '⠃', '3': '⠉', '4': '⠙', '5': '⠑', '6': '⠋', '7': '⠛', '8': '⠓', '9': '⠊', '0': '⠚' };
+  const grid = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'UP', '0', 'DOWN'];
+  const KW = 0.05, KD = 0.042, KG = 0.008;
+  grid.forEach((g, i) => {
+    const col = i % 3, row = Math.floor(i / 3);
+    const x = -0.25 + col * (KW + KG) + KW / 2, z = -0.085 + row * (KD + KG) + KD / 2 - 0.004;
+    if (g === 'UP') addKey('key:UP', '▲', '⠎⠕⠃⠑', x, z, KW, KD, '#BFCDE6', INK);
+    else if (g === 'DOWN') addKey('key:DOWN', '▼', '⠙⠑⠎⠉⠑', x, z, KW, KD, '#BFCDE6', INK);
+    else addKey('key:' + g, g, '⠼' + brMap[g], x, z, KW, KD, '#E3E7EC', '#111');
+  });
+  const acts = [['act:cancel', 'Cancelar', '⠉⠁⠝⠉⠑⠇⠁⠗', '#B42318', '#fff'], ['act:fix', 'Corrigir', '⠉⠕⠗⠗⠊⠛⠊⠗', '#F2B705', '#1A1300'], ['act:confirm', 'Confirmar', '⠉⠕⠝⠋⠊⠗⠍⠁⠗', '#1B6E35', '#fff'], ['act:ok', 'OK', '⠕⠅', '#FFFFFF', INK], ['act:repeat', 'Repetir', '⠗⠑⠏⠑⠞⠊⠗', BLUE, '#fff']];
+  acts.forEach((a, i) => addKey(a[0], a[1], a[2], -0.03, -0.088 + i * 0.039 + 0.016, 0.088, 0.032, a[3], a[4], true));
+
+  // leitor RFID
+  const readerBase = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.01, 48), mat('#2B3846'));
+  readerBase.position.set(0.17, TOP + 0.001, -0.005); consoleG.add(readerBase);
+  const ringMat = new THREE.MeshStandardMaterial({ color: '#3E8BFF', emissive: '#3E8BFF', emissiveIntensity: 1 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.005, 12, 64), ringMat);
+  ring.rotation.x = Math.PI / 2; ring.position.set(0.17, TOP + 0.008, -0.005); consoleG.add(ring);
+  const readerTop = canvasTex(256, 256, (c, W, H) => {
+    c.fillStyle = '#2B3846'; c.fillRect(0, 0, W, H);
+    c.strokeStyle = '#fff'; c.lineWidth = 9; c.lineCap = 'round';
+    rr(c, 52, 92, 92, 64, 10); c.stroke();
+    c.beginPath(); c.arc(150, 124, 30, -0.8, 0.8); c.stroke(); c.beginPath(); c.arc(150, 124, 55, -0.8, 0.8); c.stroke();
+    c.fillStyle = '#fff'; c.font = F(700, 26); c.textAlign = 'center'; c.fillText('LEITOR', W / 2, 205);
+    c.font = "24px 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"; c.fillText('⠇⠑⠊⠞⠕⠗', W / 2, 238);
+  });
+  const reader = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.012, 48), [mat('#2B3846'), new THREE.MeshStandardMaterial({ map: readerTop.tex }), mat('#2B3846')]);
+  reader.rotation.y = Math.PI / 2; reader.position.set(0.17, TOP + 0.006, -0.005); reader.userData.act = 'reader'; consoleG.add(reader); clickables.push(reader);
+  // carteirinha (animação)
+  const cardTex = canvasTex(256, 160, (c, W, H) => { c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.fillStyle = BLUE; c.fillRect(0, 0, W, 44); c.fillStyle = '#fff'; c.font = F(700, 22); c.fillText('CARTEIRINHA', 14, 30); c.fillStyle = INK; c.font = F(700, 20); c.fillText('Lucas Almeida', 14, 88); c.font = F(400, 16); c.fillText('Estudante · CEFET-MG', 14, 116); c.fillStyle = '#C9D3E0'; c.fillRect(176, 60, 64, 80); });
+  const card = new THREE.Mesh(new THREE.BoxGeometry(0.086, 0.002, 0.054), [mat('#fff'), mat('#fff'), new THREE.MeshStandardMaterial({ map: cardTex.tex }), mat('#fff'), mat('#fff'), mat('#fff')]);
+  card.visible = false; consoleG.add(card);
+  let cardAnim = 0;
+
+  // ---------- parte inferior: maquininha, impressora, fone ----------
+  const lowerY = 0.62;
+  const shelf = box(0.20, 0.02, 0.10, casing); shelf.position.set(0.16, lowerY - 0.105, FRONT + 0.05); totem.add(shelf);
+  const machineG = new THREE.Group(); machineG.position.set(0.16, lowerY, FRONT + 0.05); machineG.rotation.x = -0.25; totem.add(machineG);
+  const machineMat = mat('#12181F', { roughness: 0.35, emissive: '#000' });
+  const machine = roundedSlab(0.085, 0.17, 0.025, 0.012, machineMat); machine.userData.act = 'machine'; machineG.add(machine); clickables.push(machine);
+  const mDisp = canvasTex(256, 160, (c, W, H) => {
+    c.fillStyle = '#9FD3B0'; c.fillRect(0, 0, W, H); c.fillStyle = '#0B2A16'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = "700 34px ui-monospace, Menlo, monospace";
+    if (S.screen === 'pagar') { c.fillText(fmt(S.amt), W / 2, 56); c.fillText('APROXIME', W / 2, 110); }
+    else if (S.screen === 'ok') c.fillText('APROVADO', W / 2, H / 2); else c.fillText('BANDEJÃO', W / 2, H / 2);
+  });
+  const md = new THREE.Mesh(new THREE.PlaneGeometry(0.066, 0.041), new THREE.MeshBasicMaterial({ map: mDisp.tex, toneMapped: false }));
+  md.position.set(0, 0.045, 0.022); machineG.add(md);
+  const mKeys = canvasTex(256, 256, (c, W, H) => { c.fillStyle = '#12181F'; c.fillRect(0, 0, W, H); for (let i = 0; i < 12; i++) { c.fillStyle = i === 9 ? '#B42318' : i === 11 ? '#1B6E35' : '#3A4552'; rr(c, 30 + (i % 3) * 70, 20 + Math.floor(i / 3) * 56, 56, 42, 8); c.fill(); } c.strokeStyle = '#fff'; c.lineWidth = 4; });
+  const mk = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: mKeys.tex }));
+  mk.position.set(0, -0.025, 0.022); machineG.add(mk);
+  const nfc = canvasTex(128, 64, (c, W, H) => { c.fillStyle = '#12181F'; c.fillRect(0, 0, W, H); c.strokeStyle = '#fff'; c.lineWidth = 5; c.lineCap = 'round'; [14, 26, 38].forEach(r => { c.beginPath(); c.arc(40, 32, r, -0.7, 0.7); c.stroke(); }); });
+  const nf = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.02), new THREE.MeshBasicMaterial({ map: nfc.tex })); nf.position.set(0, 0.075, 0.022); machineG.add(nf);
+
+  // impressora
+  const slot = box(0.13, 0.016, 0.03, mat('#0B0F14')); slot.position.set(-0.13, lowerY + 0.02, FRONT + 0.01); totem.add(slot);
+  const paperMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, side: THREE.DoubleSide });
+  const recTex = canvasTex(256, 384, (c, W, H) => { c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.fillStyle = '#111'; c.font = "700 22px ui-monospace, Menlo, monospace"; c.textAlign = 'center'; c.fillText('BANDEJÃO CEFET-MG', W / 2, 40); c.font = "18px ui-monospace, Menlo, monospace"; c.fillText('Comprovante de recarga', W / 2, 72); c.textAlign = 'left'; ['Aluno: Lucas Almeida', 'Valor: ' + fmt(S.amt || 20), 'Forma: Cartão', 'Saldo: ' + fmt(S.bal)].forEach((t, i) => c.fillText(t, 22, 130 + i * 34)); });
+  paperMat.map = recTex.tex;
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.135), paperMat);
+  paper.visible = false; totem.add(paper);
+  const prLbl = canvasTex(256, 64, (c, W, H) => { c.clearRect(0, 0, W, H); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = F(700, 22); c.fillText('COMPROVANTE', W / 2, 26); c.font = "20px 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"; c.fillText('⠉⠕⠍⠏⠗⠕⠧⠁⠝⠞⠑', W / 2, 54); });
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.032), new THREE.MeshBasicMaterial({ map: prLbl.tex, transparent: true })); pl.position.set(-0.13, lowerY + 0.055, FRONT + 0.001); totem.add(pl);
+  // fone P2
+  const jack = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.01, 24), mat('#5B6B7E', { metalness: 0.6 })); jack.rotation.x = Math.PI / 2; jack.position.set(-0.13, lowerY - 0.06, FRONT + 0.004); totem.add(jack);
+  const jackHole = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.012, 16), mat('#000')); jackHole.rotation.x = Math.PI / 2; jackHole.position.copy(jack.position); jackHole.position.z += 0.002; totem.add(jackHole);
+  const jLbl = canvasTex(256, 64, (c, W, H) => { c.clearRect(0, 0, W, H); c.fillStyle = '#fff'; c.font = F(700, 22); c.fillText('FONE', 8, 26); c.font = F(400, 18); c.fillStyle = '#B8C4D3'; c.fillText('voz só no seu ouvido', 8, 52); });
+  const jl = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.028), new THREE.MeshBasicMaterial({ map: jLbl.tex, transparent: true })); jl.position.set(-0.06, lowerY - 0.06, FRONT + 0.001); totem.add(jl);
+
+  // ---------- cota de altura ----------
+  const dim = new THREE.Group(); totem.add(dim);
+  const lineM = new THREE.LineBasicMaterial({ color: BLUE });
+  function line(a, b) { const g = new THREE.BufferGeometry().setFromPoints([a, b]); dim.add(new THREE.Line(g, lineM)); }
+  const dx = -0.48, topY = BODY_Y0 + BODY_H + 0.008;
+  line(new THREE.Vector3(dx, 0, 0), new THREE.Vector3(dx, topY, 0));
+  line(new THREE.Vector3(dx - 0.03, topY, 0), new THREE.Vector3(dx + 0.03, topY, 0));
+  line(new THREE.Vector3(dx - 0.03, SCY, 0), new THREE.Vector3(dx + 0.03, SCY, 0));
+  line(new THREE.Vector3(dx - 0.03, 0.86, 0), new THREE.Vector3(dx + 0.03, 0.86, 0));
+
+  // ---------- legendas ----------
+  const tagsEl = document.getElementById('tags');
+  const tagDefs = [
+    ['Tela touch 15"', 'alto contraste · legenda do áudio', () => new THREE.Vector3(0, SCY + SH / 2 + 0.035, FRONT)],
+    ['Luz de status', 'azul aguarda · verde ok · laranja atenção', () => new THREE.Vector3(0.14, 1.555, FRONT)],
+    ['Alto-falante', 'confirma cada ação por voz', () => new THREE.Vector3(0.14, 1.47, FRONT + 0.01)],
+    ['Teclado com braile', 'números · ▲ ▼ para navegar', () => consoleG.localToWorld(new THREE.Vector3(-0.21, 0.03, -0.12))],
+    ['Teclas de ação', 'cor + ícone + braile', () => consoleG.localToWorld(new THREE.Vector3(-0.01, 0.03, 0.13))],
+    ['Leitor da carteirinha', 'login sem senha', () => consoleG.localToWorld(new THREE.Vector3(0.17, 0.03, -0.08))],
+    ['Maquininha', 'débito e crédito por aproximação', () => machineG.localToWorld(new THREE.Vector3(0.0, 0.1, 0.02))],
+    ['Impressora', 'comprovante da recarga', () => new THREE.Vector3(-0.13, lowerY + 0.085, FRONT)],
+    ['Entrada P2', 'leitor de tela no fone', () => new THREE.Vector3(-0.13, lowerY - 0.045, FRONT)],
+    ['1,58 m', 'altura total', () => new THREE.Vector3(dx, topY + 0.04, 0)],
+    ['1,18 m', 'centro da tela', () => new THREE.Vector3(dx - 0.09, SCY + 0.03, 0)],
+    ['0,86 m', 'teclado ao alcance de cadeirantes', () => new THREE.Vector3(dx - 0.12, 0.89, 0)]
+  ];
+  const tags = tagDefs.map((d, i) => { const el = document.createElement('div'); el.className = 'tag'; el.innerHTML = d[0] + '<small>' + d[1] + '</small>'; tagsEl.appendChild(el); return { el, at: d[2], dim: i >= 9 }; });
+  const v3 = new THREE.Vector3();
+  function placeTags() {
+    if (tagsEl.classList.contains('off')) return;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const close = camera.position.distanceTo(controls.target) < 1.25;
+    tags.forEach(t => {
+      const p0 = t.at(); v3.copy(p0); const toCam = camera.position.clone().sub(p0).normalize();
+      v3.project(camera);
+      const behind = v3.z > 1 || (!t.dim && (toCam.z < 0.45 || close)) || (t.dim && toCam.x > 0.6);
+      t.el.style.display = behind ? 'none' : 'block';
+      t.el.style.left = ((v3.x + 1) / 2 * w) + 'px'; t.el.style.top = ((1 - v3.y) / 2 * h) + 'px';
+    });
+  }
+
+  // ---------- lógica ----------
+  function setLed(c) { S.led = c; const col = { blue: '#3E8BFF', green: '#2ECC71', orange: '#FF9F1C' }[c]; ledMat.color.set(col); ledMat.emissive.set(col); ledLight.color.set(col); }
+  function go(screen, audio) { S.screen = screen; S.err = ''; if (audio) say(audio); refresh(); }
+  function refresh() { scr.draw(); mDisp.draw(); }
+  function reset() { Object.assign(S, { screen: 'espera', bal: 1.5, val: '', amt: 0, sel: 0, err: '', paperTarget: 0 }); S.paper = 0; paper.visible = false; setLed('blue'); say('Bem-vindo ao Bandejão. Encoste sua carteirinha no leitor.'); refresh(); }
+  const menuIds = ['rec', 'tr', 'menu', 'av'];
+  function openMenu(id) {
+    if (id === 'rec') { S.val = ''; go('recarga', 'Recarga. Toque em um valor ou digite no teclado e aperte Confirmar.'); setLed('green'); }
+    else go('info', 'Esta função está completa no protótipo navegável.');
+  }
+  function confirmVal() {
+    const v = parseInt(S.val || '0', 10);
+    if (v < 5) { S.err = 'O valor mínimo é R$ 5,00.'; setLed('orange'); say('Valor abaixo do mínimo de cinco reais.'); refresh(); return; }
+    S.amt = v; setLed('blue'); go('pagar', 'Aproxime o cartão na maquininha, abaixo do teclado.');
+  }
+  function action(id) {
+    if (id === 'reader') {
+      card.visible = true; cardAnim = 1;
+      if (S.screen === 'espera') { setTimeout(() => { setLed('green'); S.sel = 0; go('inicio', 'Olá, Lucas. Seu saldo é ' + fmt(S.bal) + '.'); }, 650); }
+      else say('Você já está identificado como Lucas.');
+      return;
+    }
+    if (id === 'machine') {
+      if (S.screen === 'pagar') { S.bal += S.amt; setLed('green'); go('ok', 'Pagamento aprovado. Novo saldo: ' + fmt(S.bal) + '. Retire o comprovante.'); recTex.draw(); paper.visible = true; S.paper = 0; S.paperTarget = 1; }
+      else say('A maquininha só é usada na recarga com cartão.');
+      return;
+    }
+    if (id.startsWith('key:')) {
+      const k = id.slice(4);
+      if (k === 'UP' || k === 'DOWN') {
+        if (S.screen === 'inicio') { S.sel = (S.sel + (k === 'UP' ? 3 : 1)) % 4; const n = ['Recarregar', 'Transferir', 'Cardápio', 'Avaliar'][S.sel]; say(n + '. Aperte OK para abrir.'); refresh(); }
+        else say('As setas escolhem as opções do menu.');
+        return;
+      }
+      if (S.screen === 'recarga') { if (S.val.length < 3) { S.val = (S.val + k).replace(/^0+/, ''); S.err = ''; say('R$ ' + (S.val || '0')); refresh(); } }
+      else if (S.screen === 'inicio' && '1234'.includes(k)) { S.sel = +k - 1; openMenu(menuIds[S.sel]); }
+      else say('O teclado digita valores e notas.');
+      return;
+    }
+    if (id === 'act:ok') { if (S.screen === 'inicio') openMenu(menuIds[S.sel]); else if (S.screen === 'recarga') confirmVal(); else say('Nada para abrir nesta tela.'); return; }
+    if (id === 'act:confirm') { if (S.screen === 'recarga') confirmVal(); else if (S.screen === 'ok' || S.screen === 'info') go('inicio', 'Menu principal.'); else say('Nada para confirmar nesta tela.'); return; }
+    if (id === 'act:fix') { if (S.screen === 'recarga') { S.val = S.val.slice(0, -1); say('Último número apagado.'); refresh(); } return; }
+    if (id === 'act:cancel') { if (S.screen === 'espera') return; if (S.screen === 'inicio') { reset(); say('Sessão encerrada. Até logo!'); refresh(); } else { setLed('green'); go('inicio', 'Operação cancelada. Nada foi cobrado.'); } return; }
+    if (id === 'act:repeat') { say(S.audio); return; }
+  }
+  function screenHit(uv) {
+    const x = uv.x * 540, y = (1 - uv.y) * 780;
+    const hit = hits.find(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    if (!hit) { if (S.screen === 'espera') say('Para começar, encoste a carteirinha no leitor à direita, abaixo da tela.'); return; }
+    if (menuIds.includes(hit.id)) { S.sel = menuIds.indexOf(hit.id); openMenu(hit.id); }
+    else if (hit.id === 'home') { setLed('green'); go('inicio', 'Menu principal. Seu saldo é ' + fmt(S.bal) + '.'); }
+    else if (hit.id[0] === 'q') { S.val = hit.id.slice(1); confirmVal(); }
+  }
+
+  // ---------- interação ----------
+  const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+  let downAt = null, hovered = null;
+  function pick(e) {
+    const r = canvas.getBoundingClientRect();
+    mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    return ray.intersectObjects(clickables, false)[0];
+  }
+  canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+  canvas.addEventListener('pointerup', e => {
+    if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) { downAt = null; return; }
+    downAt = null;
+    const h = pick(e); if (!h) return;
+    const o = h.object, act = o.userData.act;
+    if (o.userData.baseY !== undefined) { o.position.y = o.userData.baseY - 0.006; setTimeout(() => o.position.y = o.userData.baseY, 140); }
+    if (act === 'screen') screenHit(h.uv); else action(act);
+  });
+  canvas.addEventListener('pointermove', e => { const h = pick(e); const o = h ? h.object : null; if (o !== hovered) { hovered = o; canvas.style.cursor = o ? 'pointer' : 'grab'; } });
+
+  // ---------- vistas ----------
+  const views = {
+    tq: [[1.35, 1.45, 1.75], [0, 1.0, 0]],
+    front: [[0, 1.1, 2.3], [0, 0.95, 0]],
+    side: [[2.2, 1.05, 0.25], [0, 0.95, 0.05]],
+    wheel: [[0.05, 1.12, 0.95], [0, 0.98, 0.1]],
+    console: [[0.05, 1.32, 0.68], [0, 0.86, 0.24]]
+  };
+  let camAnim = null;
+  function flyTo(name) {
+    const v = views[name]; camAnim = { t: 0, fromP: camera.position.clone(), fromT: controls.target.clone(), toP: new THREE.Vector3(...v[0]), toT: new THREE.Vector3(...v[1]) };
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === name));
+    if (name === 'wheel') say('Vista de quem usa cadeira de rodas: tela, teclado e leitor ficam ao alcance, entre 0,8 e 1,4 m.');
+  }
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => flyTo(b.dataset.view)));
+  document.getElementById('tTags').addEventListener('click', e => { tagsEl.classList.toggle('off'); e.currentTarget.classList.toggle('on'); });
+  document.getElementById('tRot').addEventListener('click', e => { controls.autoRotate = !controls.autoRotate; controls.autoRotateSpeed = 1.2; e.currentTarget.classList.toggle('on'); });
+  document.getElementById('tReset').addEventListener('click', () => { reset(); flyTo('tq'); });
+  camera.position.set(...views.tq[0]); controls.target.set(...views.tq[1]);
+
+  // ---------- loop ----------
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  window.addEventListener('resize', resize);
+  const clock = new THREE.Clock();
+  function loop() {
+    const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+    if (camAnim) { camAnim.t = Math.min(1, camAnim.t + dt * 1.4); const k = 1 - Math.pow(1 - camAnim.t, 3); camera.position.lerpVectors(camAnim.fromP, camAnim.toP, k); controls.target.lerpVectors(camAnim.fromT, camAnim.toT, k); if (camAnim.t >= 1) camAnim = null; }
+    controls.update();
+    // brilhos: peça que o usuário deve usar pisca em azul
+    const pulse = 0.6 + 0.6 * Math.abs(Math.sin(t * 3));
+    const readerOn = S.screen === 'espera';
+    ringMat.emissiveIntensity = readerOn ? pulse * 1.6 : 0.25;
+    ringMat.color.set(readerOn ? '#3E8BFF' : '#5B6B7E'); ringMat.emissive.set(readerOn ? '#3E8BFF' : '#000');
+    const machOn = S.screen === 'pagar';
+    machineMat.emissive.set(machOn ? '#1E5BD6' : '#000'); machineMat.emissiveIntensity = machOn ? pulse * 0.6 : 0;
+    ledMat.emissiveIntensity = S.led === 'blue' ? 0.6 + pulse * 0.6 : 1.4;
+    // carteirinha
+    if (cardAnim > 0) { cardAnim = Math.max(0, cardAnim - dt * 0.9); const p = cardAnim; const yy = TOP + 0.02 + Math.sin(p * Math.PI) * 0.06; card.position.set(0.17, yy, -0.005 + (p - 0.5) * 0.04); card.rotation.y = 0.2; if (cardAnim === 0) card.visible = false; }
+    // papel
+    if (paper.visible) { S.paper += (S.paperTarget - S.paper) * Math.min(1, dt * 2); const len = 0.135 * S.paper; paper.scale.y = Math.max(0.001, S.paper); paper.position.set(-0.13, lowerY + 0.012 - len / 2, FRONT + 0.03); paper.rotation.x = -0.25; }
+    renderer.render(scene, camera);
+    placeTags();
+    requestAnimationFrame(loop);
+  }
+  resize();
+  window.totemDemo = { action, state: S, reader, machine: machine, camera };
+  const start = () => { document.getElementById('loading').style.display = 'none'; reset(); loop(); };
+  (document.fonts && document.fonts.load ? Promise.all([document.fonts.load(F(700, 20)), document.fonts.load(F(400, 20))]).catch(() => {}) : Promise.resolve())
+    .then(() => { head.draw(); sideLogo.draw(); readerTop.draw(); prLbl.draw(); jLbl.draw(); cardTex.draw(); keyTexs.forEach(k => k.draw()); start(); });
+})();
+</script>
+</body>
+</html>
